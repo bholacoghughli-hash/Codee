@@ -25,47 +25,30 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Extract & Patch Source Code
+      - name: Extract & Setup Configs
         run: |
           python3 -c '
           import os, zipfile, glob
-
           for f in glob.glob("**/*.zip", recursive=True):
               try:
                   with zipfile.ZipFile(f, "r") as z:
                       z.extractall(".")
-              except Exception as e:
-                  pass
-
+              except: pass
+          
           target_dir = "."
           for root, dirs, files in os.walk("."):
               if "settings.gradle.kts" in files or "settings.gradle" in files:
                   target_dir = root
                   break
-
+          
           with open(os.path.join(target_dir, ".env"), "w") as f:
               f.write("GEMINI_API_KEY=MY_GEMINI_API_KEY\n")
-
-          # Patch all Kotlin files for missing icons & enum syntax
-          for root, dirs, files in os.walk(target_dir):
-              for f in files:
-                  if f.endswith(".kt"):
-                      p = os.path.join(root, f)
-                      with open(p, "r", encoding="utf-8", errors="ignore") as rf:
-                          c = rf.read()
-                      c = c.replace("Icons.Default.BookmarkBorder", "Icons.Default.Bookmark")
-                      c = c.replace("Icons.Default.HourglassBottom", "Icons.Default.Refresh")
-                      c = c.replace("ImageStyle.values()", "listOf(ImageStyle.REALISTIC, ImageStyle.CINEMATIC, ImageStyle.ANIME, ImageStyle.THREE_D, ImageStyle.CARTOON, ImageStyle.FANTASY)")
-                      c = c.replace("ImageAspectRatio.values()", "listOf(ImageAspectRatio.SQUARE, ImageAspectRatio.LANDSCAPE, ImageAspectRatio.PORTRAIT, ImageAspectRatio.PHOTO_LANDSCAPE, ImageAspectRatio.PHOTO_PORTRAIT)")
-                      c = c.replace("VoiceLanguage.values()", "listOf(VoiceLanguage.ENGLISH, VoiceLanguage.HINDI)")
-                      with open(p, "w", encoding="utf-8") as wf:
-                          wf.write(c)
-
+          
           with open(os.environ["GITHUB_ENV"], "a") as f:
               f.write(f"PROJECT_ROOT={os.path.abspath(target_dir)}\n")
           '
 
-      - name: Write Build Configurations
+      - name: Write Stable Build Files
         run: |
           cd "$PROJECT_ROOT"
 
@@ -99,10 +82,10 @@ jobs:
 
           cat << 'EOF' > build.gradle.kts
           plugins {
-              id("com.android.application") version "8.6.1" apply false
-              id("org.jetbrains.kotlin.android") version "2.0.20" apply false
-              id("org.jetbrains.kotlin.plugin.compose") version "2.0.20" apply false
-              id("com.google.devtools.ksp") version "2.0.20-1.0.25" apply false
+              id("com.android.application") version "8.7.3" apply false
+              id("org.jetbrains.kotlin.android") version "2.0.21" apply false
+              id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
+              id("com.google.devtools.ksp") version "2.0.21-1.0.27" apply false
           }
           EOF
 
@@ -169,12 +152,10 @@ jobs:
               implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
               implementation("androidx.navigation:navigation-compose:2.8.3")
 
-              // Room
               implementation("androidx.room:room-runtime:2.6.1")
               implementation("androidx.room:room-ktx:2.6.1")
               ksp("androidx.room:room-compiler:2.6.1")
 
-              // Networking & Media
               implementation("io.coil-kt:coil-compose:2.7.0")
               implementation("com.squareup.retrofit2:retrofit:2.11.0")
               implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
@@ -184,16 +165,26 @@ jobs:
               implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
               implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
               implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
+              
+              implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
+              implementation("com.google.firebase:firebase-appcheck-recaptcha")
 
               debugImplementation("androidx.compose.ui:ui-tooling")
               debugImplementation("androidx.compose.ui:ui-test-manifest")
           }
           EOF
 
-      - name: Build APK Binary
+      - name: Build APK Binary With Error Logger
         run: |
           cd "$PROJECT_ROOT"
-          gradle assembleDebug --no-daemon -x test -x lint
+          gradle assembleDebug --no-daemon -x test -x lint > build_output.log 2>&1 || {
+              echo "🚨 KOTLIN COMPILATION ERROR 🚨"
+              echo "----------------------------------------"
+              grep -A 3 -B 1 "e: " build_output.log | tail -n 25
+              echo "----------------------------------------"
+              echo "Please send a photo of this screen."
+              exit 1
+          }
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
