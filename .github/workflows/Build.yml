@@ -25,40 +25,50 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Setup Project Structure
+      - name: Extract & Patch Source Files
         run: |
           python3 -c '
-          import os, zipfile, glob
+          import os, zipfile, glob, re
 
-          # Extract zip if exists
+          # Extract zip files
           for f in glob.glob("**/*.zip", recursive=True):
               try:
                   with zipfile.ZipFile(f, "r") as z:
                       z.extractall(".")
-                  print(f"Extracted: {f}")
               except Exception as e:
-                  print(f"Skipping {f}: {e}")
+                  print(f"Zip err: {e}")
 
-          # Find settings.gradle / settings.gradle.kts
+          # Find project root
           target_dir = "."
           for root, dirs, files in os.walk("."):
               if "settings.gradle.kts" in files or "settings.gradle" in files:
                   target_dir = root
                   break
 
-          print(f"Target Root: {target_dir}")
-          
-          # Environment variables and files
+          # Create .env files
           with open(os.path.join(target_dir, ".env"), "w") as f:
               f.write("GEMINI_API_KEY=MY_GEMINI_API_KEY\n")
           with open(os.path.join(target_dir, ".env.example"), "w") as f:
               f.write("GEMINI_API_KEY=MY_GEMINI_API_KEY\n")
 
+          # Patch enum values() to enumEntries in Kotlin files
+          for root, dirs, files in os.walk(target_dir):
+              for f in files:
+                  if f.endswith(".kt"):
+                      p = os.path.join(root, f)
+                      with open(p, "r", encoding="utf-8") as rf:
+                          c = rf.read()
+                      c = c.replace("ImageStyle.values()", "ImageStyle.entries.toTypedArray()")
+                      c = c.replace("ImageAspectRatio.values()", "ImageAspectRatio.entries.toTypedArray()")
+                      c = c.replace("VoiceLanguage.values()", "VoiceLanguage.entries.toTypedArray()")
+                      with open(p, "w", encoding="utf-8") as wf:
+                          wf.write(c)
+
           with open(os.environ["GITHUB_ENV"], "a") as f:
               f.write(f"PROJECT_ROOT={os.path.abspath(target_dir)}\n")
           '
 
-      - name: Write Clean Build Files
+      - name: Write Stable Build Configs
         run: |
           cd "$PROJECT_ROOT"
 
