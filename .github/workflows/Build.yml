@@ -172,4 +172,3 @@ jobs:
         with:
           name: AI-Creator-Studio-APK
           path: "**/build/outputs/apk/debug/*.apk"
-concurrency:
