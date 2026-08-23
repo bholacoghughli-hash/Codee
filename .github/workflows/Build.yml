@@ -25,7 +25,7 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Extract and Fix Code
+      - name: Extract & Patch Source Code
         run: |
           python3 -c '
           import os, zipfile, glob
@@ -46,13 +46,15 @@ jobs:
           with open(os.path.join(target_dir, ".env"), "w") as f:
               f.write("GEMINI_API_KEY=MY_GEMINI_API_KEY\n")
 
-          # Patch Kotlin Files
+          # Patch all Kotlin files for missing icons & enum syntax
           for root, dirs, files in os.walk(target_dir):
               for f in files:
                   if f.endswith(".kt"):
                       p = os.path.join(root, f)
                       with open(p, "r", encoding="utf-8", errors="ignore") as rf:
                           c = rf.read()
+                      c = c.replace("Icons.Default.BookmarkBorder", "Icons.Default.Bookmark")
+                      c = c.replace("Icons.Default.HourglassBottom", "Icons.Default.Refresh")
                       c = c.replace("ImageStyle.values()", "listOf(ImageStyle.REALISTIC, ImageStyle.CINEMATIC, ImageStyle.ANIME, ImageStyle.THREE_D, ImageStyle.CARTOON, ImageStyle.FANTASY)")
                       c = c.replace("ImageAspectRatio.values()", "listOf(ImageAspectRatio.SQUARE, ImageAspectRatio.LANDSCAPE, ImageAspectRatio.PORTRAIT, ImageAspectRatio.PHOTO_LANDSCAPE, ImageAspectRatio.PHOTO_PORTRAIT)")
                       c = c.replace("VoiceLanguage.values()", "listOf(VoiceLanguage.ENGLISH, VoiceLanguage.HINDI)")
@@ -172,7 +174,7 @@ jobs:
               implementation("androidx.room:room-ktx:2.6.1")
               ksp("androidx.room:room-compiler:2.6.1")
 
-              // Network & Parsing
+              // Networking & Media
               implementation("io.coil-kt:coil-compose:2.7.0")
               implementation("com.squareup.retrofit2:retrofit:2.11.0")
               implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
