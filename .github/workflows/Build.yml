@@ -25,20 +25,44 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Setup Environment and Files
+      - name: Setup Project Structure
         run: |
-          for zip in $(find . -name "*.zip"); do
-            unzip -q -o "$zip" -d .
-          done
+          python3 -c '
+          import os, zipfile, glob
 
-          PROJECT_ROOT=$(dirname $(find . -name "settings.gradle.kts" -o -name "settings.gradle" | head -n 1))
-          echo "PROJECT_ROOT=$PROJECT_ROOT" >> $GITHUB_ENV
+          # Extract zip if exists
+          for f in glob.glob("**/*.zip", recursive=True):
+              try:
+                  with zipfile.ZipFile(f, "r") as z:
+                      z.extractall(".")
+                  print(f"Extracted: {f}")
+              except Exception as e:
+                  print(f"Skipping {f}: {e}")
+
+          # Find settings.gradle / settings.gradle.kts
+          target_dir = "."
+          for root, dirs, files in os.walk("."):
+              if "settings.gradle.kts" in files or "settings.gradle" in files:
+                  target_dir = root
+                  break
+
+          print(f"Target Root: {target_dir}")
+          
+          # Environment variables and files
+          with open(os.path.join(target_dir, ".env"), "w") as f:
+              f.write("GEMINI_API_KEY=MY_GEMINI_API_KEY\n")
+          with open(os.path.join(target_dir, ".env.example"), "w") as f:
+              f.write("GEMINI_API_KEY=MY_GEMINI_API_KEY\n")
+
+          with open(os.environ["GITHUB_ENV"], "a") as f:
+              f.write(f"PROJECT_ROOT={os.path.abspath(target_dir)}\n")
+          '
+
+      - name: Write Clean Build Files
+        run: |
           cd "$PROJECT_ROOT"
 
-          echo "GEMINI_API_KEY=MY_GEMINI_API_KEY" > .env
-          echo "GEMINI_API_KEY=MY_GEMINI_API_KEY" > .env.example
-
-          # Clean gradle.properties
+          # 1. Clean gradle.properties
           cat << 'EOF' > gradle.properties
           org.gradle.jvmargs=-Xmx4g -Dfile.encoding=UTF-8
           android.useAndroidX=true
@@ -47,7 +71,7 @@ jobs:
           kotlin.compiler.execution.strategy=in-process
           EOF
 
-          # Clean settings.gradle.kts
+          # 2. Clean settings.gradle.kts
           cat << 'EOF' > settings.gradle.kts
           pluginManagement {
               repositories {
@@ -68,7 +92,7 @@ jobs:
           include(":app")
           EOF
 
-          # Clean Root build.gradle.kts
+          # 3. Clean Root build.gradle.kts
           cat << 'EOF' > build.gradle.kts
           plugins {
               id("com.android.application") version "8.6.1" apply false
@@ -78,7 +102,7 @@ jobs:
           }
           EOF
 
-          # Clean app/build.gradle.kts
+          # 4. Clean app/build.gradle.kts
           cat << 'EOF' > app/build.gradle.kts
           plugins {
               id("com.android.application")
@@ -146,7 +170,7 @@ jobs:
               implementation("androidx.room:room-ktx:2.6.1")
               ksp("androidx.room:room-compiler:2.6.1")
 
-              // Media & Network
+              // Networking & Media
               implementation("io.coil-kt:coil-compose:2.7.0")
               implementation("com.squareup.retrofit2:retrofit:2.11.0")
               implementation("com.squareup.retrofit2:converter-moshi:2.11.0")
@@ -162,7 +186,7 @@ jobs:
           }
           EOF
 
-      - name: Run Build
+      - name: Compile and Build APK
         run: |
           cd "$PROJECT_ROOT"
           gradle assembleDebug --no-daemon -x test -x lint
