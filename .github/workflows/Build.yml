@@ -162,9 +162,6 @@ jobs:
               implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
               implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
               implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-              
-              implementation(platform("com.google.firebase:firebase-bom:33.5.1"))
-              implementation("com.google.firebase:firebase-appcheck-recaptcha")
 
               debugImplementation("androidx.compose.ui:ui-tooling")
               debugImplementation("androidx.compose.ui:ui-test-manifest")
@@ -174,11 +171,7 @@ jobs:
       - name: Build Code Master APK
         run: |
           cd "$PROJECT_ROOT"
-          gradle assembleDebug --no-daemon -x test -x lint > build.log 2>&1 || {
-              echo "🚨 BUILD FAILED 🚨"
-              tail -n 150 build.log
-              exit 1
-          }
+          gradle assembleDebug --no-daemon -x test -x lint
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
