@@ -25,22 +25,46 @@ jobs:
         with:
           gradle-version: '8.10.2'
 
-      - name: Extract Project Files
+      - name: Extract & Auto-Fix Kotlin Syntax
         run: |
           python3 -c '
           import os, zipfile, glob
+          # Extract zip
           for f in glob.glob("**/*.zip", recursive=True):
               try:
                   with zipfile.ZipFile(f, "r") as z:
                       z.extractall(".")
               except: pass
           
+          # Find project root
           target_dir = "."
           for root, dirs, files in os.walk("."):
               if "settings.gradle.kts" in files or "settings.gradle" in files:
                   target_dir = root
                   break
           
+          with open(os.path.join(target_dir, ".env"), "w") as f:
+              f.write("GEMINI_API_KEY=MY_GEMINI_API_KEY\n")
+          
+          # FIX 1: Fix missing quotes in HomeScreen.kt
+          home_file = os.path.join(target_dir, "app/src/main/java/com/example/ui/screens/home/HomeScreen.kt")
+          if os.path.exists(home_file):
+              with open(home_file, "r", encoding="utf-8") as f:
+                  content = f.read()
+              content = content.replace("else \"Solve Puzzle\n", "else \"Solve Puzzle\",\n")
+              content = content.replace("else \"Solve Puzzle \n", "else \"Solve Puzzle\",\n")
+              with open(home_file, "w", encoding="utf-8") as f:
+                  f.write(content)
+
+          # FIX 2: Fix invalid Icon in PracticeScreen.kt
+          practice_file = os.path.join(target_dir, "app/src/main/java/com/example/ui/screens/practice/PracticeScreen.kt")
+          if os.path.exists(practice_file):
+              with open(practice_file, "r", encoding="utf-8") as f:
+                  content = f.read()
+              content = content.replace("Icons.Default.Stars", "Icons.Default.Star")
+              with open(practice_file, "w", encoding="utf-8") as f:
+                  f.write(content)
+
           with open(os.environ["GITHUB_ENV"], "a") as f:
               f.write(f"PROJECT_ROOT={os.path.abspath(target_dir)}\n")
           '
@@ -162,16 +186,17 @@ jobs:
               implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
               implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
               implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
-
-              debugImplementation("androidx.compose.ui:ui-tooling")
-              debugImplementation("androidx.compose.ui:ui-test-manifest")
           }
           EOF
 
       - name: Build Code Master APK
         run: |
           cd "$PROJECT_ROOT"
-          gradle assembleDebug --no-daemon -x test -x lint
+          gradle assembleDebug --no-daemon -x test -x lint > build.log 2>&1 || {
+              echo "🚨 KOTLIN SYNTAX ERROR DETECTED 🚨"
+              grep -E "e: .*\.kt" build.log | tail -n 25
+              exit 1
+          }
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
